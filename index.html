@@ -1172,23 +1172,35 @@
                     // choose correct preloader source based on viewport
                     function setPreloaderSource(){
                         try {
-                            // Gate preloader video assignment to high-performance devices only
-                            if (performanceProfile !== 'high') {
-                                // Skip assigning large video sources for medium/low devices
-                                // Hide preloader shortly to avoid blocking UX while avoiding heavy downloads
-                                setTimeout(hidePreloader, 700);
-                                return;
-                            }
                             const desktopSrc = preloaderVideo.dataset.srcDesktop || preloaderVideo.getAttribute('data-src-desktop');
                             const mobileSrc = preloaderVideo.dataset.srcMobile || preloaderVideo.getAttribute('data-src-mobile');
                             const breakpoint = 768;
                             const useMobile = window.innerWidth <= breakpoint;
-                            const chosen = useMobile ? mobileSrc : desktopSrc;
-                            if (chosen && preloaderVideo.getAttribute('src') !== chosen) {
-                                preloaderVideo.src = chosen;
+
+                            // Always prefer and assign a mobile-optimized preloader when on small viewports
+                            if (useMobile && mobileSrc) {
+                                if (preloaderVideo.getAttribute('src') !== mobileSrc) {
+                                    preloaderVideo.src = mobileSrc;
+                                    preloaderVideo.load();
+                                    preloaderVideo.play().catch((err) => {
+                                        try { preloaderVideo.muted = true; } catch(e) {}
+                                        if (soundToggleButton) soundToggleButton.classList.remove('sound-active');
+                                        preloaderVideo.play().catch(()=>{});
+                                    });
+                                }
+                                return;
+                            }
+
+                            // For desktop viewports, keep gating to high-performance devices to avoid heavy downloads
+                            if (performanceProfile !== 'high') {
+                                setTimeout(hidePreloader, 700);
+                                return;
+                            }
+
+                            if (desktopSrc && preloaderVideo.getAttribute('src') !== desktopSrc) {
+                                preloaderVideo.src = desktopSrc;
                                 preloaderVideo.load();
                                 preloaderVideo.play().catch((err) => {
-                                    // Autoplay with sound was blocked by browser; fallback to muted autoplay
                                     try { preloaderVideo.muted = true; } catch(e) {}
                                     if (soundToggleButton) soundToggleButton.classList.remove('sound-active');
                                     preloaderVideo.play().catch(()=>{});
@@ -1997,9 +2009,10 @@
                     const shouldInit3D = (function(){
                         try {
                             if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
-                            if (isTouchDevice) return false;
-                            if (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2) return false;
-                            if (navigator.deviceMemory && navigator.deviceMemory <= 1) return false;
+                            // Allow touch devices to initialize a mobile-optimized hero when device capabilities permit.
+                            // Prevent initialization only on extremely constrained devices.
+                            if (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 1) return false;
+                            if (navigator.deviceMemory && navigator.deviceMemory <= 0.5) return false;
                             return true;
                         } catch(e){ return false; }
                     })();
